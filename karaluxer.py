@@ -281,12 +281,19 @@ class KaraLuxer(QDialog):
         with open(sub_file, 'r', encoding='utf-8-sig') as f:
             sub_data = ass.parse(f)
 
+        line_list = [event for event in sub_data.events if isinstance(event, Comment)]
+        # In the special case where comments are not used:
+        # e.g https://kara.moe/kara/rock-over-japan/68a57800-9b23-4c62-bcc8-a77fb103b798
+        # The Dialogue is used.
+        if not line_list:
+            line_list = [event for event in sub_data.events if isinstance(event, Dialogue)]
+
         line_list_per_style = {}
-        unique_styles_in_text = set(self.uniqueStyles(sub_data.events))
+        unique_styles_in_text = set(self.unique_styles(line_list))
         unique_styles_in_styles = set(o.name for o in sub_data.styles)
         unique_styles = list(set(unique_styles_in_text).intersection(unique_styles_in_styles))
         for style in unique_styles:
-            all_items = list(filter(lambda event: event.style == style, sub_data.events))
+            all_items = list(filter(lambda event: event.style == style, line_list))
             all_items.sort(key=lambda line: line.start)
             line_list_per_style[style] = all_items
 
@@ -340,11 +347,11 @@ class KaraLuxer(QDialog):
             current_line.style : lines
         }
 
-    def uniqueStyles(self, theList: list[Comment]) -> list[str]:
+    def unique_styles(self, line_list: list[Comment]) -> list[str]:
         """Produces a list of unique styles found from the subtitle lines.
 
         Args:
-            theList (list[Comment])
+            line_list (list[Comment])
 
         Returns:
             List[str]: A unique list of styles.
@@ -352,9 +359,9 @@ class KaraLuxer(QDialog):
 
         # initialize a null list
         unique_list = []
-    
+
         # traverse for all elements
-        for x in theList:
+        for x in line_list:
             # check if exists in unique_list or not
             if x.style not in unique_list:
                 unique_list.append(x.style)
@@ -435,10 +442,11 @@ class KaraLuxer(QDialog):
                     )
 
                     # Increment current beat by the non-tweaked duration.
-                    current_beat += converted_duration
+                    current_beat += tweaked_duration
 
                 # Write end of line separator.
-                note_section += SEP_LINE.format(current_beat)
+                line_end = round(line.end.total_seconds() * BEATS_PER_SECOND)
+                note_section += SEP_LINE.format(min(current_beat, line_end))
 
         return note_section
 
